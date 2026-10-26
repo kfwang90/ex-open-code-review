@@ -170,7 +170,7 @@ OCR はコメントを diff 内の正確な行にアンカーできませんで�
 JSON モードでは `warnings` にも表示されます。
 
 なお `MAX_TOKENS` が制限するのは**プロンプト**だけです。モデルの出力上限は別の
-`MAX_COMPLETION_TOKENS = 16384` が制御するため、`--max-tokens` を上げても出力予算は
+`MAX_COMPLETION_TOKENS = 65536` が制御するため、`--max-tokens` を上げても出力予算は
 広がりません。
 
 緩和策:

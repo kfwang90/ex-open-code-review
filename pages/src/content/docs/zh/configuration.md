@@ -337,7 +337,7 @@ ocr scan --max-tokens 120000
 
 单次运行的参数优先级高于 `max_tokens`；如果两者都未设置，OCR 会使用内置任务模板
 的默认值。该上限只约束**提示词**：模型的输出上限由单独的
-`MAX_COMPLETION_TOKENS`（默认 `16384`）控制，因此调高 `max_tokens` 不会连带放大
+`MAX_COMPLETION_TOKENS`（默认 `65536`）控制，因此调高 `max_tokens` 不会连带放大
 输出预算。它同样与限制单次运行总 token 用量的 `--max-tokens-budget` 相互独立。
 可以用 `ocr config unset max_tokens` 恢复为内置默认值。
 

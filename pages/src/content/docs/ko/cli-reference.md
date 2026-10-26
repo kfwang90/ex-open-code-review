@@ -773,7 +773,7 @@ PowerShell 프로필에 `ocr.ps1`을 점으로 불러오는 줄을 추가하세�
 - diff만으로 `MAX_TOKENS`(기본값 `200000`)의 80%를 넘는 파일은 LLM을 호출하기 전에
   버립니다. 로그에는 남지만 실행이 실패하지는 않습니다.
 - `MAX_TOKENS`는 **프롬프트**만 제한합니다. 모델의 출력은
-  `MAX_COMPLETION_TOKENS`(`16384`)가 따로 제한하므로, 컨텍스트가 큰 모델을 쓰려고
+  `MAX_COMPLETION_TOKENS`(`65536`)가 따로 제한하므로, 컨텍스트가 큰 모델을 쓰려고
   `--max-tokens`를 올려도 출력 비용은 늘지 않습니다.
 - 변경된 라인 수가 `PLAN_MODE_LINE_THRESHOLD`(`50`, 그룹에서 가장 큰 파일 하나에
   적용)와 `PLAN_MODE_GROUP_LINE_THRESHOLD`(`100`, 파일이 2개 이상인 그룹의 변경량

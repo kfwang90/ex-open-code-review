@@ -159,7 +159,7 @@ plugin）读 `existing_code` 字段并自行在文件中定位。
 OCR 跳过该文件并继续——JSON 模式下你也会在 `warnings` 中看到。
 
 注意 `MAX_TOKENS` 只限制**提示词**。模型的输出上限由单独的
-`MAX_COMPLETION_TOKENS = 16384` 控制，所以调高 `--max-tokens` 不会放大输出预算。
+`MAX_COMPLETION_TOKENS = 65536` 控制，所以调高 `--max-tokens` 不会放大输出预算。
 
 缓解：
 

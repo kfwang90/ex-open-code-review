@@ -796,7 +796,7 @@ Add a line to your PowerShell profile that dot-sources `ocr.ps1`.
   is dropped before the LLM is called. This is logged but does not fail
   the run.
 - `MAX_TOKENS` caps the **prompt** only. The model's output is capped
-  separately by `MAX_COMPLETION_TOKENS` (`16384`), so raising
+  separately by `MAX_COMPLETION_TOKENS` (`65536`), so raising
   `--max-tokens` for a large-context model does not inflate output cost.
 - The plan phase is **automatically skipped** when changed lines fall below
   both `PLAN_MODE_LINE_THRESHOLD` (`50`, applied to the largest single file

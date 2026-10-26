@@ -223,7 +223,7 @@ on the prompt budget defined by `MAX_TOKENS = 200000`:
 > **`MAX_TOKENS` is an *input* ceiling.** It bounds the prompt — the
 > context-window budget the message buffer is compressed against — and
 > nothing else. The model's *output* cap is a separate knob,
-> `MAX_COMPLETION_TOKENS = 16384`, sent as `max_completion_tokens` on
+> `MAX_COMPLETION_TOKENS = 65536`, sent as `max_completion_tokens` on
 > every request (`Template.CompletionTokenLimit()`). Keeping them apart
 > means raising the prompt ceiling with `--max-tokens` for a
 > large-context model never silently inflates the output budget. When

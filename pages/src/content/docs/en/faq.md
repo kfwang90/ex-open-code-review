@@ -181,7 +181,7 @@ respond. OCR skips the group and continues — you'll see this in
 `warnings` in JSON mode too.
 
 `MAX_TOKENS` is the **prompt** ceiling only. The model's output is capped
-independently by `MAX_COMPLETION_TOKENS` (`16384`), so this warning is
+independently by `MAX_COMPLETION_TOKENS` (`65536`), so this warning is
 always about input size.
 
 Mitigations:

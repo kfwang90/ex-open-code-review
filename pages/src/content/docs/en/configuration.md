@@ -368,7 +368,7 @@ ocr scan --max-tokens 400000
 
 The per-run flag takes precedence over `max_tokens`; when neither is set, OCR
 uses the embedded task-template default. The limit is independent of the
-model's **output** cap (`MAX_COMPLETION_TOKENS`, `16384` in both templates)
+model's **output** cap (`MAX_COMPLETION_TOKENS`, `65536` in both templates)
 and of `--max-tokens-budget`, which caps total token use for a whole run.
 Restore the embedded default with `ocr config unset max_tokens`.
 

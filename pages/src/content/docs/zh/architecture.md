@@ -171,7 +171,7 @@ loop up to MAX_TOOL_REQUEST_TIMES (default 100):
 
 长的工具调用循环最终会溢出上下文窗口。OCR 用**三分区**策略管理，触发于
 `MAX_TOKENS = 200000` 定义的 token 预算。注意 `MAX_TOKENS` 只是**提示词**上限；
-模型的输出上限由单独的 `MAX_COMPLETION_TOKENS = 16384` 控制，因此用
+模型的输出上限由单独的 `MAX_COMPLETION_TOKENS = 65536` 控制，因此用
 `--max-tokens` 抬高提示词上限不会连带放大输出预算。
 
 | 阈值 | 常量 | 动作 |

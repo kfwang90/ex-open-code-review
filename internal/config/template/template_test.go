@@ -152,8 +152,8 @@ func TestLoadDefault_FieldsPopulated(t *testing.T) {
 	if tpl.MaxTokens != 200000 {
 		t.Errorf("MaxTokens = %d, want 200000", tpl.MaxTokens)
 	}
-	if tpl.MaxCompletionTokens != 16384 {
-		t.Errorf("MaxCompletionTokens = %d, want 16384", tpl.MaxCompletionTokens)
+	if tpl.MaxCompletionTokens != 65536 {
+		t.Errorf("MaxCompletionTokens = %d, want 65536", tpl.MaxCompletionTokens)
 	}
 	if tpl.MaxToolRequestTimes != 100 {
 		t.Errorf("MaxToolRequestTimes = %d, want 100", tpl.MaxToolRequestTimes)

@@ -214,7 +214,7 @@ main 루프는 한 번만 도는 게 아니라 그룹마다 최대 `MAX_REVIEW_R
 
 > **`MAX_TOKENS`는 *입력* 상한입니다.** 프롬프트, 즉 메시지 버퍼를 압축할 때
 > 기준이 되는 컨텍스트 윈도 예산만 제한할 뿐 그 밖에는 관여하지 않습니다.
-> 모델의 *출력* 상한은 별도의 손잡이인 `MAX_COMPLETION_TOKENS = 16384`이고,
+> 모델의 *출력* 상한은 별도의 손잡이인 `MAX_COMPLETION_TOKENS = 65536`이고,
 > 매 요청에 `max_completion_tokens`로 실려 갑니다
 > (`Template.CompletionTokenLimit()`). 둘을 떼어 놓은 덕분에, 컨텍스트가 큰
 > 모델을 쓰려고 `--max-tokens`로 프롬프트 상한을 올려도 출력 예산이 몰래
