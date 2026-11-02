@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -193,6 +194,122 @@ func formatTime(t time.Time) string {
 type CommentFileGroup struct {
 	FilePath string
 	Comments []*ReviewComment
+}
+
+// IndexNode is one entry of the session sidebar's comment-file tree. Directories
+// carry their children; files are leaves. Count is the number of review comments
+// at or below the node.
+type IndexNode struct {
+	Name     string
+	Path     string
+	IsDir    bool
+	Count    int
+	Children []*IndexNode
+}
+
+// commentIndexTree turns the flat comment list into a sorted directory tree so
+// the sidebar can filter review comments by path. Paths are normalised to
+// forward slashes because a session can be recorded on Windows.
+func commentIndexTree(comments []*ReviewComment) []*IndexNode {
+	counts := make(map[string]int)
+	for _, comment := range comments {
+		if comment == nil {
+			continue
+		}
+		p := normalizeIndexPath(comment.FilePath)
+		if p == "" {
+			continue
+		}
+		counts[p]++
+	}
+	if len(counts) == 0 {
+		return nil
+	}
+
+	type trieNode struct {
+		name     string
+		path     string
+		direct   int
+		children map[string]*trieNode
+		order    []string
+	}
+	root := &trieNode{children: make(map[string]*trieNode)}
+	for p, count := range counts {
+		node := root
+		prefix := ""
+		segments := strings.Split(p, "/")
+		for i, segment := range segments {
+			if segment == "" {
+				continue
+			}
+			if prefix == "" {
+				prefix = segment
+			} else {
+				prefix += "/" + segment
+			}
+			child, ok := node.children[segment]
+			if !ok {
+				child = &trieNode{name: segment, path: prefix, children: make(map[string]*trieNode)}
+				node.children[segment] = child
+				node.order = append(node.order, segment)
+			}
+			node = child
+			if i == len(segments)-1 {
+				node.direct += count
+			}
+		}
+	}
+
+	var build func(*trieNode) *IndexNode
+	build = func(node *trieNode) *IndexNode {
+		out := &IndexNode{
+			Name:     node.name,
+			Path:     node.path,
+			IsDir:    len(node.order) > 0,
+			Count:    node.direct,
+			Children: make([]*IndexNode, 0, len(node.order)),
+		}
+		for _, name := range node.order {
+			child := build(node.children[name])
+			out.Count += child.Count
+			out.Children = append(out.Children, child)
+		}
+		sortIndexNodes(out.Children)
+		return out
+	}
+
+	roots := make([]*IndexNode, 0, len(root.order))
+	for _, name := range root.order {
+		roots = append(roots, build(root.children[name]))
+	}
+	sortIndexNodes(roots)
+	return roots
+}
+
+func normalizeIndexPath(p string) string {
+	p = strings.ReplaceAll(p, "\\", "/")
+	p = strings.TrimSpace(p)
+	for strings.HasPrefix(p, "./") {
+		p = strings.TrimPrefix(p, "./")
+	}
+	p = strings.Trim(p, "/")
+	if p == "." {
+		return ""
+	}
+	return p
+}
+
+func sortIndexNodes(nodes []*IndexNode) {
+	sort.SliceStable(nodes, func(i, j int) bool {
+		if nodes[i].IsDir != nodes[j].IsDir {
+			return nodes[i].IsDir
+		}
+		left, right := strings.ToLower(nodes[i].Name), strings.ToLower(nodes[j].Name)
+		if left != right {
+			return left < right
+		}
+		return nodes[i].Name < nodes[j].Name
+	})
 }
 
 // SeverityCount holds counts for each severity level.
@@ -398,6 +515,7 @@ func parseTemplate(name string) (*template.Template, error) {
 			}
 			return result
 		},
+		"commentIndexTree": commentIndexTree,
 		"groupCommentsByFile": func(comments []*ReviewComment) []CommentFileGroup {
 			index := make(map[string]int)
 			var groups []CommentFileGroup

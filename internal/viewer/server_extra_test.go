@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/alibaba/open-code-review/internal/session"
 )
 
 func TestParseTemplate_ReposHTML(t *testing.T) {
@@ -613,17 +615,238 @@ func TestRenderTemplate_SecondarySectionsCollapsedByDefault(t *testing.T) {
 	})
 
 	body := rr.Body.String()
-	if count := strings.Count(body, `<details class="file-accordion section-accordion">`); count != 2 {
-		t.Fatalf("collapsed secondary section count = %d, want 2", count)
-	}
-	if strings.Contains(body, `<details class="file-accordion section-accordion" open>`) {
-		t.Fatal("secondary sections should be collapsed by default")
+	for _, id := range []string{"files-reviewed", "conversations"} {
+		if !strings.Contains(body, `id="`+id+`"`) {
+			t.Fatalf("secondary section %q was not rendered", id)
+		}
+		if strings.Contains(body, `id="`+id+`" open`) {
+			t.Fatalf("secondary section %q should be collapsed by default", id)
+		}
 	}
 	if !strings.Contains(body, `<details class="token-breakdown">`) || strings.Contains(body, `<details class="token-breakdown" open>`) {
 		t.Fatal("file token breakdown should be rendered and collapsed by default")
 	}
 	if !strings.Contains(body, `<details class="comment-file-group" open hidden>`) {
 		t.Fatal("review comment groups should remain expanded")
+	}
+}
+
+func TestRenderTemplate_RendersFailureDetails(t *testing.T) {
+	rr := httptest.NewRecorder()
+	renderTemplate(rr, "session.html", sessionPageData{
+		EncodedRepo: "repo",
+		RepoName:    "MyRepo",
+		Session: &ViewSession{
+			Summary: SessionSummary{
+				SessionID:   "abc",
+				CWD:         "/test",
+				FailedCount: 1,
+				RunManifest: &session.RunManifest{
+					Coverage: session.Coverage{
+						Failed: []session.CoverageItem{{
+							Path:           "internal/foo.go",
+							Classification: session.FailureTimeout,
+							Reason:         "provider timed out after 60s",
+						}},
+					},
+				},
+			},
+			TokenUsage: TokenUsageSummary{
+				LLMFailureDetails: []LLMFailureDetail{{
+					FilePath:   "internal/foo.go",
+					TaskType:   MainTask,
+					RequestNo:  3,
+					Error:      "rate limit exceeded",
+					DurationMs: 1500,
+				}},
+			},
+		},
+	})
+
+	body := rr.Body.String()
+	for _, want := range []string{
+		"Failed items",
+		"internal/foo.go",
+		"failure-class-timeout",
+		"provider timed out after 60s",
+		`id="coverage-failed-pagination"`,
+		"LLM failure details",
+		"rate limit exceeded",
+		"#3",
+		"1500ms",
+		`id="llm-failures-pagination"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("rendered session page missing failure detail %q", want)
+		}
+	}
+}
+
+func TestCommentIndexTree(t *testing.T) {
+	roots := commentIndexTree([]*ReviewComment{
+		{FilePath: "internal/viewer/a.go"},
+		{FilePath: "internal/viewer/a.go"},
+		{FilePath: "internal/viewer/b.go"},
+		{FilePath: "main.go"},
+		{FilePath: `internal\agent\c.go`},
+		{FilePath: ""},
+		nil,
+	})
+
+	if len(roots) != 2 {
+		t.Fatalf("roots = %d, want 2: %+v", len(roots), roots)
+	}
+	internal, mainFile := roots[0], roots[1]
+	if !internal.IsDir || internal.Name != "internal" || internal.Path != "internal" || internal.Count != 4 {
+		t.Fatalf("internal node = %+v", internal)
+	}
+	if mainFile.IsDir || mainFile.Name != "main.go" || mainFile.Count != 1 {
+		t.Fatalf("main.go node = %+v", mainFile)
+	}
+	if len(internal.Children) != 2 || internal.Children[0].Name != "agent" || internal.Children[1].Name != "viewer" {
+		t.Fatalf("internal children = %+v", internal.Children)
+	}
+	viewer := internal.Children[1]
+	if !viewer.IsDir || viewer.Count != 3 || len(viewer.Children) != 2 {
+		t.Fatalf("viewer node = %+v", viewer)
+	}
+	if viewer.Children[0].Name != "a.go" || viewer.Children[0].Count != 2 {
+		t.Errorf("a.go node = %+v", viewer.Children[0])
+	}
+	if viewer.Children[1].Name != "b.go" || viewer.Children[1].Count != 1 {
+		t.Errorf("b.go node = %+v", viewer.Children[1])
+	}
+	if got := internal.Children[0]; len(got.Children) != 1 || got.Children[0].Path != "internal/agent/c.go" {
+		t.Errorf("agent node = %+v", got)
+	}
+}
+
+func TestRenderTemplate_SessionSidebarIndex(t *testing.T) {
+	rr := httptest.NewRecorder()
+	vs := &ViewSession{
+		Summary: SessionSummary{
+			SessionID:     "abc",
+			CWD:           "/test",
+			FilesReviewed: []string{"internal/foo.go", "main.go"},
+		},
+		Files:        []*FileGroup{{FilePath: "internal/foo.go", Tasks: map[TaskType][]*TaskCard{}}},
+		SessionTasks: []*FileGroup{{FilePath: "__grouping__", Tasks: map[TaskType][]*TaskCard{}}},
+		Comments: []*ReviewComment{
+			{FilePath: "internal/foo.go", Content: "fix this", Category: "bug", Severity: "high"},
+			{FilePath: "main.go", Content: "and this", Category: "style", Severity: "low"},
+		},
+	}
+
+	renderTemplate(rr, "session.html", sessionPageData{
+		EncodedRepo: "repo",
+		RepoName:    "MyRepo",
+		Session:     vs,
+	})
+
+	body := rr.Body.String()
+	for _, want := range []string{
+		`<aside class="session-sidebar" id="session-sidebar" aria-label="Session index">`,
+		`data-sidebar-toggle`,
+		`data-sidebar-close`,
+		`data-sidebar-resizer`,
+		`role="separator"`,
+		`aria-valuemin="200"`,
+		`data-index-filter`,
+		`data-index-toggle aria-expanded="true" aria-label="Collapse internal">-</button>`,
+		`data-index-file="internal/foo.go"`,
+		`data-index-file="main.go"`,
+		`href="#review-comments"`,
+		`id="review-comments"`,
+		`data-file-path="internal/foo.go"`,
+		`data-path-filter-row`,
+		`data-clear-path-filter`,
+		`id="token-usage"`,
+		`id="files-reviewed"`,
+		`id="session-tasks"`,
+		`id="conversations"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("rendered session sidebar missing %q", want)
+		}
+	}
+}
+
+func TestRenderTemplate_SessionSidebarWithoutComments(t *testing.T) {
+	rr := httptest.NewRecorder()
+	vs := &ViewSession{
+		Summary: SessionSummary{SessionID: "abc"},
+		Files:   []*FileGroup{{FilePath: "main.go", Tasks: map[TaskType][]*TaskCard{}}},
+	}
+	renderTemplate(rr, "session.html", sessionPageData{
+		EncodedRepo: "repo",
+		RepoName:    "MyRepo",
+		Session:     vs,
+	})
+
+	body := rr.Body.String()
+	for _, want := range []string{
+		`<aside class="session-sidebar" id="session-sidebar" aria-label="Session index">`,
+		`data-sidebar-toggle`,
+		`href="#token-usage"`,
+		`href="#conversations"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("rendered session sidebar missing %q", want)
+		}
+	}
+	for _, absent := range []string{
+		`data-index-filter`,
+		`session-index-tree`,
+		`data-index-empty`,
+		`href="#review-comments"`,
+	} {
+		if strings.Contains(body, absent) {
+			t.Errorf("sidebar rendered comment-only markup %q without comments", absent)
+		}
+	}
+}
+
+func TestSessionJS_SidebarContract(t *testing.T) {
+	script, err := assets.ReadFile("static/session.js")
+	if err != nil {
+		t.Fatalf("read static/session.js: %v", err)
+	}
+	for _, want := range []string{
+		"window.ocrSessionComments = { setPathFilter: setPathFilter }",
+		"window.ocrSessionIndex =",
+		"dataset.filePath",
+		"data-sidebar-resizer",
+		"data-index-filter",
+		"setExpanded",
+		"pointerdown",
+		"ocr-viewer-sidebar-width",
+		"ocr-viewer-sidebar-open",
+		"setPathFilter(raw)",
+		"replace(/\\\\/g, '/')",
+	} {
+		if !strings.Contains(string(script), want) {
+			t.Errorf("session.js is missing sidebar contract %q", want)
+		}
+	}
+}
+
+func TestSidebarCSS_ResizableAndResponsive(t *testing.T) {
+	css, err := assets.ReadFile("static/style.css")
+	if err != nil {
+		t.Fatalf("read static/style.css: %v", err)
+	}
+	for _, want := range []string{
+		".session-sidebar {",
+		"flex: 0 0 var(--sidebar-width);",
+		".sidebar-resizer {",
+		"cursor: col-resize;",
+		".index-dir.is-collapsed > .index-tree {",
+		".index-file.is-active {",
+		"@media (max-width: 1024px) {",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("style.css is missing sidebar rule %q", want)
+		}
 	}
 }
 

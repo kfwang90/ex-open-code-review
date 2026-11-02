@@ -395,8 +395,8 @@ func TestLoadSession_LLMError(t *testing.T) {
 
 	writeJSONL(t, filepath.Join(repoDir, "errs.jsonl"),
 		`{"type":"session_start","timestamp":"2025-01-01T00:00:00Z","cwd":"/x","model":"m"}`,
-		`{"type":"llm_request","filePath":"a.go","taskType":"main_task","request_no":1,"messages":[]}`,
-		`{"type":"llm_error","filePath":"a.go","taskType":"main_task","error":"rate limit exceeded","duration_ms":500}`,
+		`{"type":"llm_request","filePath":"a.go","taskType":"main_task","request_no":2,"messages":[]}`,
+		`{"type":"llm_error","filePath":"a.go","taskType":"main_task","request_no":2,"error":"rate limit exceeded","duration_ms":500}`,
 		`{"type":"session_end","duration_seconds":5,"files_reviewed":["a.go"],"llm_failures":1}`,
 	)
 
@@ -414,6 +414,14 @@ func TestLoadSession_LLMError(t *testing.T) {
 	}
 	if cards[0].DurationMs != 500 {
 		t.Errorf("DurationMs = %d", cards[0].DurationMs)
+	}
+	if len(vs.TokenUsage.LLMFailureDetails) != 1 {
+		t.Fatalf("LLMFailureDetails = %+v, want 1 entry", vs.TokenUsage.LLMFailureDetails)
+	}
+	detail := vs.TokenUsage.LLMFailureDetails[0]
+	if detail.FilePath != "a.go" || detail.TaskType != MainTask || detail.RequestNo != 2 ||
+		detail.Error != "rate limit exceeded" || detail.DurationMs != 500 {
+		t.Errorf("LLMFailureDetail = %+v", detail)
 	}
 }
 
@@ -553,6 +561,12 @@ func TestLoadSession_LLMErrorWithoutRequest(t *testing.T) {
 	}
 	if len(vs.Files) != 0 {
 		t.Errorf("Files = %d", len(vs.Files))
+	}
+	if len(vs.TokenUsage.LLMFailureDetails) != 1 {
+		t.Fatalf("LLMFailureDetails = %+v, want the orphan failure recorded", vs.TokenUsage.LLMFailureDetails)
+	}
+	if detail := vs.TokenUsage.LLMFailureDetails[0]; detail.FilePath != "unknown.go" || detail.Error != "fail" {
+		t.Errorf("LLMFailureDetail = %+v", detail)
 	}
 }
 

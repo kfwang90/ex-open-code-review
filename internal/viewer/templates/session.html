@@ -10,10 +10,46 @@
 <body>
 {{if $.Static}}<nav class="breadcrumb">{{template "nav-brand" false}}{{template "breadcrumbs" .}}</nav>{{else}}{{template "app-header" .}}{{end}}
 <main class="session-page">
+<div class="session-layout" id="session-layout" data-sidebar-open="true">
+<aside class="session-sidebar" id="session-sidebar" aria-label="Session index">
+    <div class="sidebar-header">
+        <span class="sidebar-title">Index</span>
+        <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close index">&times;</button>
+    </div>
+    {{if .Session.Comments}}
+    <label class="sidebar-filter">
+        <span class="sr-only">Filter review comments by file name or path</span>
+        <input type="search" placeholder="Filter by file name or path" data-index-filter autocomplete="off" spellcheck="false">
+    </label>
+    {{end}}
+    <nav class="sidebar-sections" aria-label="Page sections">
+        {{if .Session.Summary.RunManifest}}<a href="#coverage">Coverage</a>{{end}}
+        <a href="#token-usage">Token Usage</a>
+        {{if .Session.Comments}}<a href="#review-comments">Review Comments <span class="index-count">{{len .Session.Comments}}</span></a>{{end}}
+        {{if .Session.Summary.FilesReviewed}}<a href="#files-reviewed">Files Reviewed <span class="index-count">{{len .Session.Summary.FilesReviewed}}</span></a>{{end}}
+        {{if .Session.SessionTasks}}<a href="#session-tasks">Session Tasks</a>{{end}}
+        {{if .Session.Files}}<a href="#conversations">Conversations</a>{{end}}
+    </nav>
+    {{if .Session.Comments}}
+    {{with commentIndexTree .Session.Comments}}
+    <div class="sidebar-index-title">Comment files</div>
+    <nav class="session-index-tree" aria-label="Review comment files">
+        {{template "index-tree" .}}
+    </nav>
+    <p class="index-empty" data-index-empty hidden>No matching files.</p>
+    {{end}}
+    {{end}}
+</aside>
+<div class="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize index" aria-valuemin="200" aria-valuemax="520" aria-valuenow="264" tabindex="0" data-sidebar-resizer></div>
+<div class="session-main">
 <div class="session-header">
     <div class="page-heading">
         {{if not $.Static}}<a class="back-link" href="/r/{{.EncodedRepo}}" aria-label="Back to sessions">{{icon "chevron-left"}}</a>{{end}}
         <h2>Session: {{.Session.Summary.SessionID}}</h2>
+        <button type="button" class="session-sidebar-toggle" data-sidebar-toggle aria-expanded="true" aria-controls="session-sidebar">
+            <span class="sidebar-toggle-glyph" aria-hidden="true">&#9776;</span>
+            <span>Index</span>
+        </button>
     </div>
     <div class="meta">
         <span class="meta-truncate" title="{{.Session.Summary.CWD}}"><strong>CWD:</strong> {{.Session.Summary.CWD}}</span>
@@ -34,7 +70,7 @@
 </div>
 
 {{if .Session.Summary.RunManifest}}
-<div class="token-summary">
+<div class="token-summary" id="coverage">
     <h3>Coverage</h3>
     <div class="token-stats">
         <div class="token-item"><div class="token-label">Selected</div><div class="token-value">{{.Session.Summary.SelectedCount}}</div></div>
@@ -43,10 +79,34 @@
         <div class="token-item"><div class="token-label">Failed</div><div class="token-value{{if .Session.Summary.FailedCount}} token-value-error{{end}}">{{.Session.Summary.FailedCount}}</div></div>
         <div class="token-item"><div class="token-label">Waived</div><div class="token-value">{{.Session.Summary.WaivedCount}}</div></div>
     </div>
+    {{with .Session.Summary.RunManifest.Coverage.Failed}}
+    <details class="token-breakdown">
+        <summary class="token-breakdown-toggle">
+            <span class="chevron-sm" aria-hidden="true">{{icon "chevron-right"}}</span>
+            <span>Failed items</span>
+            <span class="file-count-badge">{{countLabel (len .) "item" "items"}}</span>
+        </summary>
+        <div class="token-breakdown-body">
+            <table class="token-table" data-pagination-source data-pagination-page-size="20">
+                <thead><tr><th>File</th><th>Classification</th><th>Reason</th></tr></thead>
+                <tbody>
+                {{range .}}
+                    <tr data-pagination-item>
+                        <td title="{{.Path}}"><span class="failure-path">{{.Path}}</span></td>
+                        <td><span class="failure-class failure-class-{{.Classification}}">{{.Classification}}</span></td>
+                        <td class="failure-reason">{{if .Reason}}{{.Reason}}{{else}}-{{end}}</td>
+                    </tr>
+                {{end}}
+                </tbody>
+            </table>
+            {{template "pager" (dict "prefix" "coverage-failed" "label" "Failed item pages")}}
+        </div>
+    </details>
+    {{end}}
 </div>
 {{end}}
 
-<div class="token-summary">
+<div class="token-summary" id="token-usage">
     <h3>Token Usage</h3>
     <div class="token-stats">
         <div class="token-item">
@@ -108,10 +168,36 @@
         </div>
     </details>
     {{end}}
+    {{with .Session.TokenUsage.LLMFailureDetails}}
+    <details class="token-breakdown">
+        <summary class="token-breakdown-toggle">
+            <span class="chevron-sm" aria-hidden="true">{{icon "chevron-right"}}</span>
+            <span>LLM failure details</span>
+            <span class="file-count-badge">{{countLabel (len .) "failure" "failures"}}</span>
+        </summary>
+        <div class="token-breakdown-body">
+            <table class="token-table" data-pagination-source data-pagination-page-size="20">
+                <thead><tr><th>File</th><th>Task</th><th>Request</th><th>Error</th><th>Duration</th></tr></thead>
+                <tbody>
+                {{range .}}
+                    <tr data-pagination-item>
+                        <td title="{{sessionTaskLabel .FilePath}}">{{sessionTaskLabel .FilePath | truncate 60}}</td>
+                        <td>{{.TaskType}}</td>
+                        <td>{{if .RequestNo}}#{{.RequestNo}}{{else}}-{{end}}</td>
+                        <td class="failure-reason"><pre class="failure-error">{{.Error}}</pre></td>
+                        <td>{{if .DurationMs}}{{.DurationMs}}ms{{else}}-{{end}}</td>
+                    </tr>
+                {{end}}
+                </tbody>
+            </table>
+            {{template "pager" (dict "prefix" "llm-failures" "label" "LLM failure pages")}}
+        </div>
+    </details>
+    {{end}}
 </div>
 
 {{if .Session.Comments}}
-<div class="comments-section">
+<div class="comments-section" id="review-comments">
     <h3>Review Comments <span class="findings-count">({{len .Session.Comments}} findings)</span></h3>
     <div class="comments-toolbar">
     <div class="toolbar-filters">
@@ -140,6 +226,11 @@
     </div>
     {{end}}
     </div>
+    <div class="path-filter-row" data-path-filter-row hidden>
+        <span class="comment-filter-label">File:</span>
+        <span class="path-filter-value" data-path-filter-value></span>
+        <button type="button" class="clear-path-filter" data-clear-path-filter>clear</button>
+    </div>
     <div class="marks-row">
         <span class="comment-filter-label" data-marks-count aria-live="polite"></span>
         <div class="marks-actions">
@@ -160,7 +251,7 @@
         {{range .Comments}}
             {{$lines := numberedCodeLines .ExistingCode .StartLine .EndLine}}
             {{$numbered := and $lines (index $lines 0).Num}}
-            <div class="comment-card" data-comment-card data-category="{{commentCategory .Category}}" data-severity="{{commentSeverity .Severity}}" data-mark-id="{{.MarkID}}" hidden>
+            <div class="comment-card" data-comment-card data-category="{{commentCategory .Category}}" data-severity="{{commentSeverity .Severity}}" data-mark-id="{{.MarkID}}" data-file-path="{{.FilePath}}" hidden>
                 <div class="comment-meta">
                     {{if .Category}}<span class="comment-badge {{categoryClass .Category}}">{{.Category}}</span>{{end}}
                     {{if .Severity}}<span class="comment-badge {{severityClass .Severity}}">{{.Severity}}</span>{{end}}
@@ -202,7 +293,7 @@
 {{end}}
 
 {{if .Session.Summary.FilesReviewed}}
-<details class="file-accordion section-accordion">
+<details class="file-accordion section-accordion" id="files-reviewed">
     <summary class="file-accordion-header">
         <span class="chevron" aria-hidden="true">{{icon "chevron-right"}}</span>
         <span class="section-title">Files Reviewed</span>
@@ -220,7 +311,7 @@
 {{end}}
 
 {{if .Session.SessionTasks}}
-<details class="file-accordion section-accordion" open>
+<details class="file-accordion section-accordion" id="session-tasks" open>
     <summary class="file-accordion-header">
         <span class="chevron" aria-hidden="true">{{icon "chevron-right"}}</span>
         <span class="section-title">Session Tasks</span>
@@ -238,7 +329,7 @@
 {{end}}
 
 {{if .Session.Files}}
-<details class="file-accordion section-accordion">
+<details class="file-accordion section-accordion" id="conversations">
     <summary class="file-accordion-header">
         <span class="chevron" aria-hidden="true">{{icon "chevron-right"}}</span>
         <span class="section-title">Conversations</span>
@@ -256,6 +347,8 @@
 {{end}}
 
 {{if $.Static}}<script>{{$.InlineJS}}</script>{{else}}<script src="/static/a11y.js"></script><script src="/static/pager.js"></script><script src="/static/session.js"></script>{{end}}
+</div>
+</div>
 </main>
 </body>
 </html>
@@ -389,4 +482,26 @@
     <div class="response-text">{{.}}</div>
 </div>
 {{end}}
+{{end}}
+
+{{define "index-tree"}}
+<ul class="index-tree">
+{{range .}}
+    <li class="index-node{{if .IsDir}} index-dir{{else}} index-file-node{{end}}" data-index-node data-index-dir="{{if .IsDir}}1{{else}}0{{end}}" data-index-path="{{.Path}}">
+        {{if .IsDir}}
+        <div class="index-row">
+            <button type="button" class="index-toggle" data-index-toggle aria-expanded="true" aria-label="Collapse {{.Path}}">-</button>
+            <span class="index-label" title="{{.Path}}">{{.Name}}</span>
+            <span class="index-count">{{.Count}}</span>
+        </div>
+        {{template "index-tree" .Children}}
+        {{else}}
+        <button type="button" class="index-file" data-index-file="{{.Path}}" title="{{.Path}}">
+            <span class="index-file-name">{{.Name}}</span>
+            <span class="index-count">{{.Count}}</span>
+        </button>
+        {{end}}
+    </li>
+{{end}}
+</ul>
 {{end}}

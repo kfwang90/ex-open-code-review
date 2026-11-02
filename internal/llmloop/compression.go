@@ -306,7 +306,12 @@ func (r *Runner) triggerAsyncCompression(ctx context.Context, st *compressionSta
 		return
 	}
 	msgSnapshot := copyMessages(messages)
-	asyncCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+	// Detached from the caller's cancellation so a finishing review group cannot
+	// abort an in-flight summary, but still cancellable: cancelPendingCompression
+	// and the deferred cancel at the end of RunMainTask reclaim it. No deadline
+	// of its own — a large compress zone can legitimately need more than a fixed
+	// cap, and the LLM client's per-request timeout remains the backstop.
+	asyncCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	job := &compressionJob{done: make(chan struct{}), cancel: cancel, snapshotLen: len(messages)}
 	st.pendingJob = job
 	st.mu.Unlock()

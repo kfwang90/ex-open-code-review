@@ -271,6 +271,18 @@ type TokenUsageSummary struct {
 	TotalCacheWriteTokens int
 	RequestCount          int
 	FileTokenBreakdown    []FileTokenUsage
+	LLMFailureDetails     []LLMFailureDetail
+}
+
+// LLMFailureDetail is one failed LLM request, reconstructed from the llm_error
+// record TaskRecord.SetError writes. The records counted here are the same ones
+// session_end's llm_failures counter totals.
+type LLMFailureDetail struct {
+	FilePath   string
+	TaskType   TaskType
+	RequestNo  int
+	Error      string
+	DurationMs int64
 }
 
 // FileTokenUsage tracks token totals for a single file within a session.
@@ -632,10 +644,22 @@ func LoadSession(root, encodedRepo, sessionID string) (*ViewSession, error) {
 			fp, _ := rec["filePath"].(string)
 			tt, _ := rec["taskType"].(string)
 			errStr, _ := rec["error"].(string)
+			reqNo := 0
+			if n, ok := rec["request_no"].(float64); ok {
+				reqNo = int(n)
+			}
 			durationMs := int64(0)
 			if d, ok := rec["duration_ms"].(float64); ok {
 				durationMs = int64(d)
 			}
+
+			vs.TokenUsage.LLMFailureDetails = append(vs.TokenUsage.LLMFailureDetails, LLMFailureDetail{
+				FilePath:   fp,
+				TaskType:   TaskType(tt),
+				RequestNo:  reqNo,
+				Error:      errStr,
+				DurationMs: durationMs,
+			})
 
 			fg := fileIndex[fp]
 			if fg != nil {
